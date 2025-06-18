@@ -3,22 +3,44 @@ import axios from 'axios';
 
 const MongoItems = () => {
   const [items, setItems] = useState([]);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: ''
-  });
+  const [formData, setFormData] = useState({ name: '', description: '' });
   const [editingId, setEditingId] = useState(null);
+
+  // Aggregation
+  const [topSelling, setTopSelling] = useState([]);
+  const [userSpending, setUserSpending] = useState([]);
 
   useEffect(() => {
     fetchItems();
+    fetchTopSelling();
+    fetchUserSpending();
+    // eslint-disable-next-line
   }, []);
 
   const fetchItems = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/mongo`);
-      setItems(response.data);
-    } catch (error) {
-      console.error('Error fetching items:', error);
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/mongo`);
+      setItems(res.data);
+    } catch (err) {
+      console.error('Error fetching items:', err);
+    }
+  };
+
+  const fetchTopSelling = async () => {
+    try {
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/mongo/top-selling`);
+      setTopSelling(res.data);
+    } catch (err) {
+      setTopSelling([]);
+    }
+  };
+
+  const fetchUserSpending = async () => {
+    try {
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/mongo/user-spending`);
+      setUserSpending(res.data);
+    } catch (err) {
+      setUserSpending([]);
     }
   };
 
@@ -30,19 +52,16 @@ const MongoItems = () => {
       } else {
         await axios.post(`${process.env.REACT_APP_API_URL}/api/mongo`, formData);
       }
-      fetchItems();
       setFormData({ name: '', description: '' });
       setEditingId(null);
-    } catch (error) {
-      console.error('Error saving item:', error);
+      fetchItems();
+    } catch (err) {
+      alert('Error saving item');
     }
   };
 
   const handleEdit = (item) => {
-    setFormData({
-      name: item.name,
-      description: item.description
-    });
+    setFormData({ name: item.name, description: item.description });
     setEditingId(item._id);
   };
 
@@ -50,8 +69,8 @@ const MongoItems = () => {
     try {
       await axios.delete(`${process.env.REACT_APP_API_URL}/api/mongo/${id}`);
       fetchItems();
-    } catch (error) {
-      console.error('Error deleting item:', error);
+    } catch (err) {
+      alert('Error deleting item');
     }
   };
 
@@ -62,25 +81,26 @@ const MongoItems = () => {
         <input
           type="text"
           value={formData.name}
-          onChange={(e) => setFormData({...formData, name: e.target.value})}
+          onChange={e => setFormData({ ...formData, name: e.target.value })}
           placeholder="Name"
           required
         />
         <input
           type="text"
           value={formData.description}
-          onChange={(e) => setFormData({...formData, description: e.target.value})}
+          onChange={e => setFormData({ ...formData, description: e.target.value })}
           placeholder="Description"
           required
         />
-        <button type="submit">
-          {editingId ? 'Update Item' : 'Add Item'}
-        </button>
+        <button type="submit">{editingId ? 'Update Item' : 'Add Item'}</button>
         {editingId && (
-          <button type="button" onClick={() => {
-            setFormData({ name: '', description: '' });
-            setEditingId(null);
-          }}>
+          <button
+            type="button"
+            onClick={() => {
+              setFormData({ name: '', description: '' });
+              setEditingId(null);
+            }}
+          >
             Cancel
           </button>
         )}
@@ -97,6 +117,35 @@ const MongoItems = () => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Aggregation */}
+      <div className="aggregation-section">
+        <h3>Top 5 Sản Phẩm Bán Chạy</h3>
+        <ul>
+          {topSelling.length === 0 ? (
+            <li>Không có dữ liệu</li>
+          ) : (
+            topSelling.map((item, idx) => (
+              <li key={idx}>
+                <strong>Product ID:</strong> {item._id} | <strong>Sold:</strong> {item.totalSold}
+              </li>
+            ))
+          )}
+        </ul>
+
+        <h3>User Spending</h3>
+        <ul>
+          {userSpending.length === 0 ? (
+            <li>Không có dữ liệu</li>
+          ) : (
+            userSpending.map((user, idx) => (
+              <li key={idx}>
+                <strong>User ID:</strong> {user._id} | <strong>Total Spent:</strong> {user.totalSpent}
+              </li>
+            ))
+          )}
+        </ul>
       </div>
     </div>
   );
