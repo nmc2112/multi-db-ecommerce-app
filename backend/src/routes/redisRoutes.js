@@ -1,82 +1,56 @@
 const express = require('express');
 const router = express.Router();
+const { v4: uuidv4 } = require('uuid'); // npm i uuid
 
-router.post('/', async (req, res) => {
-    try {
-        const redis = req.app.locals.redis;
-        const { id, name, description } = req.body;
+// Đăng ký
+router.post('/register', async (req, res) => {
+  const redis = req.app.locals.redis;
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Thiếu thông tin' });
 
-        if (!id) return res.status(400).json({ error: 'ID is required' });
+  const exists = await redis.exists(`user:${username}`);
+  if (exists) return res.status(400).json({ error: 'Username đã tồn tại' });
 
-        await redis.hSet(`item:${id}`, { name, description });
-        res.status(201).json({ id, name, description });
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    }
+  await redis.hSet(`user:${username}`, { password, role: 'user' });
+  res.json({ message: 'Đăng ký thành công!' });
 });
 
-router.get('/', async (req, res) => {
-    try {
-        const redis = req.app.locals.redis;
-        const keys = await redis.keys('item:*');
-        const items = [];
+// Đăng nhập
+// Express route: Only admin can login
+router.post('/login', async (req, res) => {
+  console.log('[DEBUG] Đã vào /api/redis/login với body:', req.body);
+  const redis = req.app.locals.redis;
+  const { username, password } = req.body;
 
-        for (const key of keys) {
-            const item = await redis.hGetAll(key);
-            items.push({ [key]: item });
-        }
+  // Check if user exists
+  const user = await redis.hGetAll(`user:${username}`);
+  if (!user || !user.password) {
+    return res.status(400).json({ error: 'User does not exist' });
+  }
 
-        res.json(items);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    }
+  // Check password
+  if (user.password !== password) {
+    return res.status(400).json({ error: 'Incorrect password' });
+  }
+
+  // Check if user is admin
+  if (user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admin can login!' });
+  }
+
+  // If all checks pass, create session
+  const sessionId = require('uuid').v4();
+  await redis.set(`session:${sessionId}`, username, { EX: 3600 }); // 1 hour expiration
+  res.json({ message: 'Login successful', sessionId, user: { username, role: user.role } });
 });
 
-router.get('/:id', async (req, res) => {
-    try {
-        const redis = req.app.locals.redis;
-        const item = await redis.hGetAll(`item:${req.params.id}`);
 
-        if (!item || Object.keys(item).length === 0) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        res.json(item);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-router.put('/:id', async (req, res) => {
-    try {
-        const redis = req.app.locals.redis;
-        const key = `item:${req.params.id}`;
-
-        if (!(await redis.exists(key))) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        await redis.hSet(key, req.body);
-        const updatedItem = await redis.hGetAll(key);
-        res.json(updatedItem);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-router.delete('/:id', async (req, res) => {
-    try {
-        const redis = req.app.locals.redis;
-        const key = `item:${req.params.id}`;
-
-        if (!(await redis.del(key))) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        res.json({ message: 'Item removed' });
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    }
+// Đăng xuất
+router.post('/logout', async (req, res) => {
+  const redis = req.app.locals.redis;
+  const { sessionId } = req.body;
+  await redis.del(`session:${sessionId}`);
+  res.json({ message: 'Logout thành công' });
 });
 
 module.exports = router;
