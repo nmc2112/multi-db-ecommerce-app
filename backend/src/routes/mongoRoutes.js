@@ -3,7 +3,6 @@ const router = express.Router();
 const { Item, User, Order } = require('../models/mongoModel');
 
 // ===== ITEM APIs =====
-// Tạo mới item
 router.post('/item', async (req, res) => {
   try {
     const item = new Item(req.body);
@@ -13,7 +12,6 @@ router.post('/item', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-// Lấy tất cả item
 router.get('/item', async (req, res) => {
   try {
     const items = await Item.find();
@@ -22,7 +20,6 @@ router.get('/item', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Lấy 1 item
 router.get('/item/:id', async (req, res) => {
   try {
     const item = await Item.findById(req.params.id);
@@ -32,7 +29,6 @@ router.get('/item/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Sửa 1 item
 router.put('/item/:id', async (req, res) => {
   try {
     const item = await Item.findByIdAndUpdate(
@@ -46,7 +42,6 @@ router.put('/item/:id', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-// Xóa item
 router.delete('/item/:id', async (req, res) => {
   try {
     const item = await Item.findByIdAndDelete(req.params.id);
@@ -75,7 +70,6 @@ router.get('/user', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// ... thêm các route cho user nếu muốn
 
 // ===== ORDER APIs =====
 router.post('/order', async (req, res) => {
@@ -102,30 +96,89 @@ router.get('/top-selling', async (req, res) => {
   try {
     const result = await Order.aggregate([
       { $unwind: "$items" },
-      { $group: { _id: "$items.productId", totalSold: { $sum: "$items.quantity" } } },
+      {
+        $group: {
+          _id: "$items.productId",
+          totalSold: { $sum: "$items.quantity" }
+        }
+      },
       { $sort: { totalSold: -1 } },
-      { $limit: 5 }
+      { $limit: 5 },
+      // Lookup product info
+      {
+        $lookup: {
+          from: "items",
+          localField: "_id",
+          foreignField: "_id",
+          as: "product"
+        }
+      },
+      { $unwind: "$product" },
+      // Project name instead of _id
+      {
+        $project: {
+          _id: 0,
+          productId: "$_id",
+          productName: "$product.name",
+          totalSold: 1
+        }
+      }
     ]);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// Top user spending
+
+
+// Top user spending (JOIN to Item for price)
 router.get('/user-spending', async (req, res) => {
   try {
     const result = await Order.aggregate([
       { $unwind: "$items" },
-      { $group: {
+      // Join để lấy giá của product
+      {
+        $lookup: {
+          from: "items",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      { $unwind: "$productInfo" },
+      // Tổng số tiền đã chi theo userId
+      {
+        $group: {
           _id: "$userId",
-          totalSpent: { $sum: { $multiply: ["$items.quantity", "$items.price"] } }
-      }},
-      { $sort: { totalSpent: -1 } }
+          totalSpent: { $sum: { $multiply: ["$items.quantity", "$productInfo.price"] } }
+        }
+      },
+      { $sort: { totalSpent: -1 } },
+      // Lookup sang users để lấy username
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",         // _id là userId (ObjectId)
+          foreignField: "_id",       // users._id
+          as: "userInfo"
+        }
+      },
+      { $unwind: "$userInfo" },
+      {
+        $project: {
+          _id: 0,
+          userId: "$_id",
+          username: "$userInfo.username",
+          totalSpent: 1
+        }
+      }
     ]);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+
 
 module.exports = router;
