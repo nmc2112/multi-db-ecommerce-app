@@ -22,7 +22,6 @@ This application demonstrates the use of **MongoDB**, **Redis**, and **Neo4j** i
 
 - Docker and Docker Compose installed
 - Node.js and npm (for local development)
-- [Optional] Neo4j Desktop for visualizing data
 
 ## Setup Instructions
 
@@ -49,7 +48,7 @@ This application demonstrates the use of **MongoDB**, **Redis**, and **Neo4j** i
 4. **Access the application:**
     - Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-5. **Seed initial data (optional):**
+5. **Seed initial data:**
     - Insert product, user, and order data using provided scripts, or by using the frontend/admin API endpoints.
 
 ## Key Endpoints
