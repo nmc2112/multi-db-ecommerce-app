@@ -9,13 +9,40 @@ import './App.css';
 function App() {
   const [user, setUser] = useState(null);
 
+  const handleLogout = async () => {
+    const sessionId = localStorage.getItem('sessionId');
+    if (sessionId) {
+      try {
+        await axios.post(`${process.env.REACT_APP_API_URL}/api/redis/logout`, { sessionId });
+      } catch (err) {
+        // Có thể ignore lỗi ở đây
+      }
+      localStorage.removeItem('sessionId');
+    }
+    setUser(null);
+  };
+
   return (
     <Router>
-      {/* <nav>
+      {user && (
+          <button
+            onClick={handleLogout}
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              padding: '6px 14px',
+              fontWeight: 'bold'
+            }}
+          >
+            Logout
+          </button>
+        )}
+      <nav>
         <Link to="/mongo">MongoDB</Link> | 
-        <Link to="/redis">Redis</Link> | 
+        {/* <Link to="/redis">Redis</Link> |  */}
         <Link to="/neo4j">Neo4j</Link>
-      </nav> */}
+      </nav>
       <Routes>
         {/* Nếu chưa đăng nhập, mọi truy cập khác đều về Login */}
         <Route path="/" element={

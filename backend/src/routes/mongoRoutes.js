@@ -131,12 +131,10 @@ router.get('/top-selling', async (req, res) => {
 });
 
 
-// Top user spending (JOIN to Item for price)
 router.get('/user-spending', async (req, res) => {
   try {
     const result = await Order.aggregate([
       { $unwind: "$items" },
-      // Join để lấy giá của product
       {
         $lookup: {
           from: "items",
@@ -146,38 +144,34 @@ router.get('/user-spending', async (req, res) => {
         }
       },
       { $unwind: "$productInfo" },
-      // Tổng số tiền đã chi theo userId
       {
         $group: {
           _id: "$userId",
           totalSpent: { $sum: { $multiply: ["$items.quantity", "$productInfo.price"] } }
         }
       },
-      { $sort: { totalSpent: -1 } },
-      // Lookup sang users để lấy username
-      {
-        $lookup: {
-          from: "users",
-          localField: "_id",         // _id là userId (ObjectId)
-          foreignField: "_id",       // users._id
-          as: "userInfo"
-        }
-      },
-      { $unwind: "$userInfo" },
-      {
-        $project: {
-          _id: 0,
-          userId: "$_id",
-          username: "$userInfo.username",
-          totalSpent: 1
-        }
-      }
+      { $sort: { totalSpent: -1 } }
     ]);
-    res.json(result);
+
+    const redis = req.app.locals.redis;
+    const output = [];
+    for (let row of result) {
+      let redisUser = await redis.hGetAll(`user:${row._id}`);
+      output.push({
+        userId: row._id,
+        username: redisUser.username || row._id, // Fallback if not found in Redis
+        totalSpent: row.totalSpent
+      });
+    }
+
+    res.json(output);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 
 
 

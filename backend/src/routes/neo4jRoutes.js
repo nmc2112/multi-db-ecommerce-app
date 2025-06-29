@@ -1,80 +1,66 @@
 const express = require('express');
 const router = express.Router();
-const neo4jModel = require('../models/neo4jModel');
 
-// Create user
-router.post('/user', async (req, res) => {
-  const { username, email } = req.body;
+// Get all users (nodes)
+router.get('/users', async (req, res) => {
+  const session = req.app.locals.neo4j.session();
   try {
-    const user = await neo4jModel.createUser(username, email);
-    res.status(201).json(user);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    const result = await session.run('MATCH (u:User) RETURN u.userId AS userId, u.name AS name');
+    res.json(result.records.map(r => ({
+      userId: r.get('userId'),
+      name: r.get('name')
+    })));
+  } finally {
+    await session.close();
   }
 });
 
-// Create product
-router.post('/product', async (req, res) => {
-  const { name, description } = req.body;
+// Create a "follow" relationship
+router.post('/follow', async (req, res) => {
+  const { fromId, toId } = req.body;
+  const session = req.app.locals.neo4j.session();
   try {
-    const product = await neo4jModel.createProduct(name, description);
-    res.status(201).json(product);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    await session.run(
+      'MATCH (a:User {userId: $from}), (b:User {userId: $to}) MERGE (a)-[:FOLLOWS]->(b)',
+      { from: fromId, to: toId }
+    );
+    res.json({ message: 'Followed successfully!' });
+  } finally {
+    await session.close();
   }
 });
 
-// Follow user
-router.post('/user/:from/follow/:to', async (req, res) => {
-  const { from, to } = req.params;
+// Get a user's followers
+router.get('/followers/:userId', async (req, res) => {
+  const session = req.app.locals.neo4j.session();
   try {
-    await neo4jModel.followUser(from, to);
-    res.json({ message: `${from} now follows ${to}` });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    const result = await session.run(
+      'MATCH (f:User)-[:FOLLOWS]->(u:User {userId: $userId}) RETURN f.userId AS userId, f.name AS name',
+      { userId: req.params.userId }
+    );
+    res.json(result.records.map(r => ({
+      userId: r.get('userId'),
+      name: r.get('name')
+    })));
+  } finally {
+    await session.close();
   }
 });
 
-// Like product
-router.post('/user/:username/like/:product', async (req, res) => {
-  const { username, product } = req.params;
+// Get a user's following
+router.get('/following/:userId', async (req, res) => {
+  const session = req.app.locals.neo4j.session();
   try {
-    await neo4jModel.likeProduct(username, product);
-    res.json({ message: `${username} likes ${product}` });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Shortest path between users
-router.get('/user/:from/path/:to', async (req, res) => {
-  const { from, to } = req.params;
-  try {
-    const path = await neo4jModel.shortestPath(from, to);
-    res.json({ path });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Recommendations
-router.get('/user/:username/recommendations', async (req, res) => {
-  const { username } = req.params;
-  try {
-    const recommendations = await neo4jModel.recommendProducts(username);
-    res.json({ recommendations });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Central users
-router.get('/central-users', async (req, res) => {
-  try {
-    const users = await neo4jModel.getCentralUsers();
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    const result = await session.run(
+      'MATCH (u:User {userId: $userId})-[:FOLLOWS]->(f:User) RETURN f.userId AS userId, f.name AS name',
+      { userId: req.params.userId }
+    );
+    res.json(result.records.map(r => ({
+      userId: r.get('userId'),
+      name: r.get('name')
+    })));
+  } finally {
+    await session.close();
   }
 });
 
