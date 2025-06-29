@@ -1,103 +1,81 @@
 const express = require('express');
 const router = express.Router();
+const neo4jModel = require('../models/neo4jModel');
 
-router.post('/', async (req, res) => {
-    const session = req.app.locals.neo4j.session();
-    try {
-        const { name, description } = req.body;
-        const result = await session.executeWrite(tx => tx.run(
-            `CREATE (n:Item {name: $name, description: $description, createdAt: datetime()})
-         RETURN n`,
-            { name, description }
-        ));
-
-        const node = result.records[0].get('n');
-        res.status(201).json(node.properties);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        await session.close();
-    }
+// Create user
+router.post('/user', async (req, res) => {
+  const { username, email } = req.body;
+  try {
+    const user = await neo4jModel.createUser(username, email);
+    res.status(201).json(user);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.get('/', async (req, res) => {
-    const session = req.app.locals.neo4j.session();
-    try {
-        const result = await session.executeRead(tx => tx.run(
-            'MATCH (n:Item) RETURN n ORDER BY n.createdAt DESC'
-        ));
-
-        const items = result.records.map(record => record.get('n'));
-        res.json(items);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        await session.close();
-    }
+// Create product
+router.post('/product', async (req, res) => {
+  const { name, description } = req.body;
+  try {
+    const product = await neo4jModel.createProduct(name, description);
+    res.status(201).json(product);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.get('/:id', async (req, res) => {
-    const session = req.app.locals.neo4j.session();
-    try {
-        const result = await session.executeRead(tx => tx.run(
-            'MATCH (n:Item) WHERE elementId(n) = $id RETURN n',
-            { id: req.params.id }
-        ));
-
-        if (result.records.length === 0) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        const node = result.records[0].get('n');
-        res.json(node.properties);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        await session.close();
-    }
+// Follow user
+router.post('/user/:from/follow/:to', async (req, res) => {
+  const { from, to } = req.params;
+  try {
+    await neo4jModel.followUser(from, to);
+    res.json({ message: `${from} now follows ${to}` });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.put('/:id', async (req, res) => {
-    const session = req.app.locals.neo4j.session();
-    try {
-        const result = await session.executeWrite(tx => tx.run(
-            `MATCH (n:Item) WHERE elementId(n) = $id
-         SET n += $properties, n.updatedAt = datetime()
-         RETURN n`,
-            { id: req.params.id, properties: req.body }
-        ));
-
-        if (result.records.length === 0) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        const node = result.records[0].get('n');
-        res.json(node.properties);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        await session.close();
-    }
+// Like product
+router.post('/user/:username/like/:product', async (req, res) => {
+  const { username, product } = req.params;
+  try {
+    await neo4jModel.likeProduct(username, product);
+    res.json({ message: `${username} likes ${product}` });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.delete('/:id', async (req, res) => {
-    const session = req.app.locals.neo4j.session();
-    try {
-        const result = await session.executeWrite(tx => tx.run(
-            'MATCH (n:Item) WHERE elementId(n) = $id DELETE n',
-            { id: req.params.id }
-        ));
+// Shortest path between users
+router.get('/user/:from/path/:to', async (req, res) => {
+  const { from, to } = req.params;
+  try {
+    const path = await neo4jModel.shortestPath(from, to);
+    res.json({ path });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
-        if (result.summary.counters._stats.nodesDeleted === 0) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
+// Recommendations
+router.get('/user/:username/recommendations', async (req, res) => {
+  const { username } = req.params;
+  try {
+    const recommendations = await neo4jModel.recommendProducts(username);
+    res.json({ recommendations });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
-        res.json({ message: 'Item removed' });
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        await session.close();
-    }
+// Central users
+router.get('/central-users', async (req, res) => {
+  try {
+    const users = await neo4jModel.getCentralUsers();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 module.exports = router;
